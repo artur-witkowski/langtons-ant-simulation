@@ -4,8 +4,10 @@ use std::io::{stdout, Write};
 use std::thread;
 use std::time::Duration;
 
-const WIDTH: i64 = 40;
-const HEIGHT: i64 = 20;
+const WIDTH: i64 = 80;
+const HEIGHT: i64 = 70;
+const DELAY_TIME_IN_MS: u64 = 50;
+const SKIP_DRAWING_FIRST_N_STEPS: u64 = 10000;
 
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
 struct Point {
@@ -94,7 +96,16 @@ fn main() {
     let mut stdout = stdout();
     stdout.execute(cursor::Hide).unwrap();
 
+    let mut steps = 0;
+
     loop {
+        steps += 1;
+        ant.step();
+
+        if steps < SKIP_DRAWING_FIRST_N_STEPS {
+            continue;
+        }
+
         // Clear screen
         stdout.execute(cursor::MoveTo(0, 0)).unwrap();
         stdout
@@ -102,8 +113,6 @@ fn main() {
                 crossterm::terminal::ClearType::All,
             ))
             .unwrap();
-
-        ant.step();
 
         // Limit display to cells within this bounding box
         for y in 0..HEIGHT {
@@ -130,7 +139,17 @@ fn main() {
             .unwrap();
         stdout.write("🐜".as_bytes()).unwrap();
 
+        stdout
+            .execute(cursor::MoveTo(0 as u16, HEIGHT as u16))
+            .unwrap();
+        stdout.write("Liczba kroków: ".as_bytes()).unwrap();
+        stdout.write(steps.to_string().as_bytes()).unwrap();
+
+        if steps >= 20000 {
+            break;
+        }
+
         let _ = stdout.flush();
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(DELAY_TIME_IN_MS));
     }
 }
