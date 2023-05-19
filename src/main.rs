@@ -1,4 +1,5 @@
 use crossterm::{cursor, ExecutableCommand};
+use rand::Rng;
 use std::collections::HashSet;
 use std::io::{stdout, Write};
 use std::thread;
@@ -8,6 +9,7 @@ const WIDTH: i64 = 80;
 const HEIGHT: i64 = 70;
 const DELAY_TIME_IN_MS: u64 = 50;
 const SKIP_DRAWING_FIRST_N_STEPS: u64 = 10000;
+const AMOUNT_OF_ANTS: u8 = 1;
 
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
 struct Point {
@@ -26,27 +28,28 @@ enum Direction {
 struct Ant {
     position: Point,
     direction: Direction,
-    black_cells: HashSet<Point>,
+    id: u8,
 }
 
 impl Ant {
-    fn new() -> Ant {
+    fn new(id: u8) -> Ant {
+        let mut rng = rand::thread_rng();
         Ant {
             position: Point {
-                x: WIDTH / 2,
-                y: HEIGHT / 2,
+                x: rng.gen_range(0..WIDTH),
+                y: rng.gen_range(0..HEIGHT),
             },
             direction: Direction::Up,
-            black_cells: HashSet::new(),
+            id, // Ustawiamy identyfikator
         }
     }
 
-    fn step(&mut self) {
-        if self.black_cells.contains(&self.position) {
-            self.black_cells.remove(&self.position);
+    fn step(&mut self, black_cells: &mut HashSet<Point>) {
+        if black_cells.contains(&self.position) {
+            black_cells.remove(&self.position);
             self.turn_right();
         } else {
-            self.black_cells.insert(self.position);
+            black_cells.insert(self.position);
             self.turn_left();
         }
 
@@ -92,34 +95,43 @@ impl Ant {
 }
 
 fn main() {
-    let mut ant = Ant::new();
     let mut stdout = stdout();
     stdout.execute(cursor::Hide).unwrap();
 
+    let mut ants = vec![];
+    for id in 0..AMOUNT_OF_ANTS {
+        ants.push(Ant::new(id));
+    }
+    let mut black_cells: HashSet<Point> = HashSet::new();
     let mut steps = 0;
 
     loop {
         steps += 1;
-        ant.step();
+        for ant in &mut ants {
+            ant.step(&mut black_cells);
+        }
 
         if steps < SKIP_DRAWING_FIRST_N_STEPS {
             continue;
         }
 
-        // Clear screen
-        stdout.execute(cursor::MoveTo(0, 0)).unwrap();
-        stdout
-            .execute(crossterm::terminal::Clear(
-                crossterm::terminal::ClearType::All,
-            ))
-            .unwrap();
+        for ant in &mut ants {
+            // Drawing ants
+            stdout
+                .execute(cursor::MoveTo(
+                    (ant.position.x) as u16,
+                    (ant.position.y) as u16,
+                ))
+                .unwrap();
+            stdout.write(format!("{}", ant.id).as_bytes()).unwrap();
+        }
 
         // Limit display to cells within this bounding box
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
                 let cell = Point { x, y };
 
-                let symbol = if ant.black_cells.contains(&cell) {
+                let symbol = if black_cells.contains(&cell) {
                     '█'
                 } else {
                     '.'
@@ -130,19 +142,10 @@ fn main() {
             }
         }
 
-        // Print ant
-        stdout
-            .execute(cursor::MoveTo(
-                (ant.position.x) as u16,
-                (ant.position.y) as u16,
-            ))
-            .unwrap();
-        stdout.write("🐜".as_bytes()).unwrap();
-
         stdout
             .execute(cursor::MoveTo(0 as u16, HEIGHT as u16))
             .unwrap();
-        stdout.write("Liczba kroków: ".as_bytes()).unwrap();
+        stdout.write("Steps: ".as_bytes()).unwrap();
         stdout.write(steps.to_string().as_bytes()).unwrap();
 
         if steps >= 20000 {
